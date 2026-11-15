@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La déclaration de l'application au catalogue `/apps`.
+
+     SANS `noupdate` : ce qui est décrit ici appartient au code. Les VERSIONS,
+     avec leur APK, appartiennent au gestionnaire et n'y figurent pas.
+-->
+<odoo>
+    <data>
+        <record id="mobile_app_genie_en_herbe" model="mobile.app">
+            <field name="name">Génie en herbe</field>
+            <field name="slug">genie-en-herbe</field>
+            <field name="sequence">80</field>
+            <field name="summary">Des concours de questions sur vos cours et vos documents : matchs, équipes et tournois en ligne</field>
+            <field name="icon" type="base64" file="genie_en_herbe_backend/static/description/icon.png"/>
+            <!-- minSdk = flutter.minSdkVersion, soit 24 : Android 7.0. -->
+            <field name="min_android">7.0</field>
+            <field name="first_run_note">Ouvrez l'application et connectez-vous avec votre numéro de téléphone (code reçu par WhatsApp).</field>
+            <field name="guide_template_xmlid">genie_en_herbe_backend.user_guide_content</field>
+            <field name="guide_report_xmlid">genie_en_herbe_backend.action_report_user_guide</field>
+            <field name="description" type="html">
+                <div>
+                    <p>
+                        <strong>Génie en herbe</strong> transforme vos documents
+                        en concours de questions. Chargez un cours, un manuel,
+                        une présentation ou un tableau (PDF, Word, PowerPoint,
+                        Excel, OpenDocument, texte), choisissez les pages au
+                        programme : les questions sont préparées pour ces pages.
+                    </p>
+                    <p>
+                        <strong>Jouez à plusieurs.</strong> Matchs de 2 à 10
+                        joueurs ou entre deux équipes (une équipe peut jouer sur
+                        un seul téléphone), tournois à élimination directe : le
+                        premier qui prend la main répond. L'organisateur peut
+                        diriger le match sans jouer et le projeter.
+                    </p>
+                    <p>
+                        <strong>Réviser, puis comprendre.</strong> Les joueurs
+                        relisent les pages avant le match ; après, chaque
+                        réponse est expliquée et renvoie au passage qui la
+                        justifie.
+                    </p>
+                    <p>
+                        Questions rédigées par l'intelligence artificielle
+                        (vérifiées dans le texte) ou tirées du texte sans IA ;
+                        le propriétaire du document peut les relire et les
+                        corriger.
+                    </p>
+                </div>
+            </field>
+        </record>
+    </data>
+</odoo>

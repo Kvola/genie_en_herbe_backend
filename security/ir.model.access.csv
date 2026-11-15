@@ -1,0 +1,20 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_gh_api_session_manager,gh_api_session manager,model_gh_api_session,group_gh_manager,1,1,1,1
+access_gh_player_manager,gh_player manager,model_gh_player,group_gh_manager,1,1,1,1
+access_gh_report_manager,gh_report manager,model_gh_report,group_gh_manager,1,1,1,1
+access_gh_document_manager,gh_document manager,model_gh_document,group_gh_manager,1,1,1,1
+access_gh_document_page_manager,gh_document_page manager,model_gh_document_page,group_gh_manager,1,1,1,1
+access_gh_document_access_manager,gh_document_access manager,model_gh_document_access,group_gh_manager,1,1,1,1
+access_gh_question_manager,gh_question manager,model_gh_question,group_gh_manager,1,1,1,1
+access_gh_ai_request_manager,gh_ai_request manager,model_gh_ai_request,group_gh_manager,1,1,1,1
+access_gh_ai_code_manager,gh_ai_code manager,model_gh_ai_code,group_gh_manager,1,1,1,1
+access_gh_ai_code_wizard_manager,gh_ai_code_wizard manager,model_gh_ai_code_wizard,group_gh_manager,1,1,1,1
+access_gh_team_manager,gh_team manager,model_gh_team,group_gh_manager,1,1,1,1
+access_gh_team_member_manager,gh_team_member manager,model_gh_team_member,group_gh_manager,1,1,1,1
+access_gh_match_manager,gh_match manager,model_gh_match,group_gh_manager,1,1,1,1
+access_gh_match_participant_manager,gh_match_participant manager,model_gh_match_participant,group_gh_manager,1,1,1,1
+access_gh_match_question_manager,gh_match_question manager,model_gh_match_question,group_gh_manager,1,1,1,1
+access_gh_match_answer_manager,gh_match_answer manager,model_gh_match_answer,group_gh_manager,1,1,1,1
+access_gh_tournament_manager,gh_tournament manager,model_gh_tournament,group_gh_manager,1,1,1,1
+access_gh_tournament_entry_manager,gh_tournament_entry manager,model_gh_tournament_entry,group_gh_manager,1,1,1,1
+access_gh_tournament_duel_manager,gh_tournament_duel manager,model_gh_tournament_duel,group_gh_manager,1,1,1,1

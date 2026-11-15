@@ -1,0 +1,653 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================== Joueurs -->
+    <record id="gh_player_view_list" model="ir.ui.view">
+        <field name="name">gh.player.list</field>
+        <field name="model">gh.player</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="banned" decoration-muted="not active">
+                <field name="pseudo"/>
+                <field name="phone"/>
+                <field name="lang"/>
+                <field name="match_id"/>
+                <field name="tournament_id"/>
+                <field name="matches_played"/>
+                <field name="matches_won"/>
+                <field name="tournaments_won"/>
+                <field name="report_count"/>
+                <field name="ai_credits" optional="show"/>
+                <field name="banned"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_player_view_form" model="ir.ui.view">
+        <field name="name">gh.player.form</field>
+        <field name="model">gh.player</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_unban" type="object" string="Lever la suspension" invisible="not banned"/>
+                    <button name="action_release" type="object" string="Libérer (incident)"
+                            invisible="not match_id and not tournament_id"
+                            confirm="Le joueur pourra rejoindre une autre partie, même si celle-ci n'est pas finie. Continuer ?"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="pseudo"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="phone"/>
+                            <field name="lang"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="banned"/>
+                            <field name="ban_reason" invisible="not banned"/>
+                            <field name="match_id"/>
+                            <field name="tournament_id"/>
+                        </group>
+                        <group string="IA">
+                            <field name="ai_credits"/>
+                        </group>
+                        <group string="Statistiques">
+                            <field name="matches_played"/>
+                            <field name="matches_won"/>
+                            <field name="tournaments_won"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Documents">
+                            <field name="document_ids" readonly="1">
+                                <list><field name="name"/><field name="page_count"/><field name="visibility"/>
+                                    <field name="state"/><field name="create_date"/></list>
+                            </field>
+                        </page>
+                        <page string="Signalements">
+                            <field name="report_ids">
+                                <list><field name="create_date"/><field name="reporter_id"/><field name="pseudo"/>
+                                    <field name="reason"/><field name="state"/></list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gh_player_view_search" model="ir.ui.view">
+        <field name="name">gh.player.search</field>
+        <field name="model">gh.player</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="pseudo"/>
+                <field name="phone"/>
+                <filter name="engaged" string="En partie" domain="['|', ('match_id', '!=', False), ('tournament_id', '!=', False)]"/>
+                <filter name="banned" string="Suspendus" domain="[('banned', '=', True)]"/>
+                <filter name="archived" string="Comptes supprimés" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_player" model="ir.actions.act_window">
+        <field name="name">Joueurs</field>
+        <field name="res_model">gh.player</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============================== Signalements -->
+    <record id="gh_report_view_list" model="ir.ui.view">
+        <field name="name">gh.report.list</field>
+        <field name="model">gh.report</field>
+        <field name="arch" type="xml">
+            <list decoration-info="state == 'open'">
+                <field name="create_date"/>
+                <field name="player_id"/>
+                <field name="pseudo"/>
+                <field name="reporter_id"/>
+                <field name="reason"/>
+                <field name="state"/>
+                <button name="action_ban" type="object" string="Suspendre" icon="fa-ban" invisible="state != 'open'"/>
+                <button name="action_reject" type="object" string="Sans suite" icon="fa-times" invisible="state != 'open'"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_gh_report" model="ir.actions.act_window">
+        <field name="name">Signalements de pseudos</field>
+        <field name="res_model">gh.report</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="domain">[]</field>
+    </record>
+    <record id="gh_report_view_search" model="ir.ui.view">
+        <field name="name">gh.report.search</field>
+        <field name="model">gh.report</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="player_id"/>
+                <filter name="open" string="À traiter" domain="[('state', '=', 'open')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ============================== Matchs -->
+    <record id="gh_match_view_list" model="ir.ui.view">
+        <field name="name">gh.match.list</field>
+        <field name="model">gh.match</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'running'" decoration-muted="state in ('finished', 'cancelled')">
+                <field name="create_date"/>
+                <field name="code"/>
+                <field name="kind"/>
+                <field name="mode"/>
+                <field name="creator_id"/>
+                <field name="pages_label"/>
+                <field name="lang"/>
+                <field name="player_count"/>
+                <field name="state"/>
+                <field name="result" optional="show"/>
+                <field name="tournament_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_match_view_form" model="ir.ui.view">
+        <field name="name">gh.match.form</field>
+        <field name="model">gh.match</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <header>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="code" readonly="1"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="kind" readonly="1"/>
+                            <field name="mode" readonly="1"/>
+                            <field name="creator_id" readonly="1"/>
+                            <field name="tournament_id" readonly="1" invisible="not tournament_id"/>
+                            <field name="lang" readonly="1"/>
+                            <field name="pages_label" readonly="1"/>
+                            <field name="host_only" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="question_count" readonly="1"/>
+                            <field name="question_seconds" readonly="1"/>
+                            <field name="hand_seconds" readonly="1"/>
+                            <field name="phase" readonly="1"/>
+                            <field name="result" readonly="1"/>
+                            <field name="winner_participant_id" readonly="1" invisible="not winner_participant_id"/>
+                            <field name="winner_team_id" readonly="1" invisible="not winner_team_id"/>
+                            <field name="started_at" readonly="1"/>
+                            <field name="finished_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Joueurs">
+                            <field name="participant_ids" readonly="1">
+                                <list><field name="rank"/><field name="player_id"/><field name="team_id"/>
+                                    <field name="score"/><field name="correct_count"/><field name="wrong_count"/>
+                                    <field name="left"/></list>
+                            </field>
+                        </page>
+                        <page string="Questions">
+                            <field name="question_ids" readonly="1">
+                                <list><field name="sequence"/><field name="prompt"/><field name="ref_label"/>
+                                    <field name="source"/><field name="is_tiebreak"/><field name="state"/>
+                                    <field name="winner_participant_id"/></list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gh_match_view_search" model="ir.ui.view">
+        <field name="name">gh.match.search</field>
+        <field name="model">gh.match</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="code"/>
+                <field name="creator_id"/>
+                <filter name="live" string="En attente ou en cours" domain="[('state', 'in', ('lobby', 'running'))]"/>
+                <filter name="free" string="Matchs libres" domain="[('kind', '=', 'free')]"/>
+                <filter name="duel" string="Duels de tournoi" domain="[('kind', '=', 'duel')]"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_match" model="ir.actions.act_window">
+        <field name="name">Matchs</field>
+        <field name="res_model">gh.match</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============================== Tournois -->
+    <record id="gh_tournament_view_list" model="ir.ui.view">
+        <field name="name">gh.tournament.list</field>
+        <field name="model">gh.tournament</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'running'" decoration-muted="state in ('finished', 'cancelled')">
+                <field name="create_date"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="mode"/>
+                <field name="organizer_id"/>
+                <field name="entry_count"/>
+                <field name="state"/>
+                <field name="winner_entry_id"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_tournament_view_form" model="ir.ui.view">
+        <field name="name">gh.tournament.form</field>
+        <field name="model">gh.tournament</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <header>
+                    <button name="action_cancel" type="object" string="Annuler le tournoi"
+                            invisible="state in ('finished', 'cancelled')"
+                            confirm="Les matchs en cours sont arrêtés et tous les joueurs libérés. Continuer ?"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1><field name="code" readonly="1"/></div>
+                    <group>
+                        <group>
+                            <field name="mode" readonly="1"/>
+                            <field name="organizer_id" readonly="1"/>
+                            <field name="lang" readonly="1"/>
+                            <field name="pages_label" readonly="1"/>
+                            <field name="winner_entry_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="min_entries" readonly="1"/>
+                            <field name="max_entries" readonly="1"/>
+                            <field name="question_count" readonly="1"/>
+                            <field name="question_seconds" readonly="1"/>
+                            <field name="hand_seconds" readonly="1"/>
+                            <field name="forfeit_minutes" readonly="1"/>
+                            <field name="rounds" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Participants">
+                            <field name="entry_ids" readonly="1">
+                                <list><field name="display_name" string="Participant"/><field name="seed"/>
+                                    <field name="state"/><field name="eliminated_round"/></list>
+                            </field>
+                        </page>
+                        <page string="Duels">
+                            <field name="duel_ids" readonly="1">
+                                <list><field name="round"/><field name="position"/><field name="entry_a_id"/>
+                                    <field name="score_a"/><field name="score_b"/><field name="entry_b_id"/>
+                                    <field name="state"/><field name="result"/><field name="winner_entry_id"/>
+                                    <field name="match_id"/></list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_gh_tournament" model="ir.actions.act_window">
+        <field name="name">Tournois</field>
+        <field name="res_model">gh.tournament</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============================== Documents -->
+    <record id="gh_document_view_list" model="ir.ui.view">
+        <field name="name">gh.document.list</field>
+        <field name="model">gh.document</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state != 'ready'">
+                <field name="create_date"/>
+                <field name="name"/>
+                <field name="owner_id"/>
+                <field name="file_kind"/>
+                <field name="lang"/>
+                <field name="page_count"/>
+                <field name="chars" optional="hide"/>
+                <field name="visibility"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_document_view_form" model="ir.ui.view">
+        <field name="name">gh.document.form</field>
+        <field name="model">gh.document</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="owner_id" readonly="1"/>
+                            <field name="filename" readonly="1"/>
+                            <field name="file_kind" readonly="1"/>
+                            <field name="unit" readonly="1"/>
+                            <field name="lang"/>
+                        </group>
+                        <group>
+                            <field name="visibility"/>
+                            <field name="share_code" readonly="1"/>
+                            <field name="page_count" readonly="1"/>
+                            <field name="chars" readonly="1"/>
+                            <field name="question_count"/>
+                            <field name="state" readonly="1"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Pages">
+                            <field name="page_ids" readonly="1">
+                                <list><field name="number"/><field name="label"/><field name="chars"/>
+                                    <field name="offline_done"/><field name="ai_state"/><field name="ai_error"/></list>
+                                <form><group><field name="label"/><field name="ai_state"/></group>
+                                    <field name="text"/></form>
+                            </field>
+                        </page>
+                        <page string="Ajouté par">
+                            <field name="access_ids" readonly="1">
+                                <list><field name="player_id"/><field name="create_date"/></list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gh_document_view_search" model="ir.ui.view">
+        <field name="name">gh.document.search</field>
+        <field name="model">gh.document</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="owner_id"/>
+                <filter name="public" string="Publics" domain="[('visibility', '=', 'public')]"/>
+                <filter name="shared" string="Partagés par code" domain="[('visibility', '=', 'shared')]"/>
+                <filter name="uploading" string="Envoi en cours" domain="[('state', '=', 'uploading')]"/>
+                <filter name="archived" string="Retirés" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_document" model="ir.actions.act_window">
+        <field name="name">Documents</field>
+        <field name="res_model">gh.document</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============================== Questions -->
+    <record id="gh_question_view_list" model="ir.ui.view">
+        <field name="name">gh.question.list</field>
+        <field name="model">gh.question</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="document_id"/>
+                <field name="page_id"/>
+                <field name="prompt"/>
+                <field name="source"/>
+                <field name="state"/>
+                <field name="times_played"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_question_view_form" model="ir.ui.view">
+        <field name="name">gh.question.form</field>
+        <field name="model">gh.question</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="document_id"/>
+                            <field name="page_id" readonly="1"/>
+                            <field name="source" readonly="1"/>
+                            <field name="state"/>
+                            <field name="times_played" readonly="1"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="prompt"/>
+                        <field name="options" readonly="1"/>
+                        <field name="answer"/>
+                        <field name="explain"/>
+                        <field name="quote"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gh_question_view_search" model="ir.ui.view">
+        <field name="name">gh.question.search</field>
+        <field name="model">gh.question</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="prompt"/>
+                <field name="document_id"/>
+                <filter name="ai" string="IA" domain="[('source', '=', 'ai')]"/>
+                <filter name="offline" string="Sans IA" domain="[('source', '=', 'offline')]"/>
+                <filter name="validated" string="Validées" domain="[('state', '=', 'validated')]"/>
+                <group><filter name="by_document" string="Document" context="{'group_by': 'document_id'}"/></group>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_question" model="ir.actions.act_window">
+        <field name="name">Questions</field>
+        <field name="res_model">gh.question</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ============================== IA : lots, codes -->
+    <record id="gh_ai_request_view_list" model="ir.ui.view">
+        <field name="name">gh.ai.request.list</field>
+        <field name="model">gh.ai.request</field>
+        <field name="arch" type="xml">
+            <list create="0" decoration-danger="state in ('failed', 'rejected')" decoration-muted="state == 'refused'">
+                <field name="create_date"/>
+                <field name="player_id"/>
+                <field name="document_id"/>
+                <field name="state"/>
+                <field name="paid_by"/>
+                <field name="chars"/>
+                <field name="questions"/>
+                <field name="dropped"/>
+                <field name="model" optional="hide"/>
+                <field name="input_tokens" optional="hide"/>
+                <field name="output_tokens" optional="hide"/>
+                <field name="cost" sum="Total"/>
+                <field name="duration_ms" optional="hide"/>
+                <field name="error" optional="show"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_ai_request_view_search" model="ir.ui.view">
+        <field name="name">gh.ai.request.search</field>
+        <field name="model">gh.ai.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="player_id"/>
+                <field name="document_id"/>
+                <filter name="today" string="Aujourd'hui" domain="[('day', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="failed" string="Échecs" domain="[('state', 'in', ('failed', 'rejected'))]"/>
+                <group>
+                    <filter name="by_day" string="Jour" context="{'group_by': 'day'}"/>
+                    <filter name="by_player" string="Joueur" context="{'group_by': 'player_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_ai_request" model="ir.actions.act_window">
+        <field name="name">Lots traités par l'IA</field>
+        <field name="res_model">gh.ai.request</field>
+        <field name="view_mode">list,pivot,graph</field>
+    </record>
+
+    <record id="gh_ai_code_view_list" model="ir.ui.view">
+        <field name="name">gh.ai.code.list</field>
+        <field name="model">gh.ai.code</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="player_id">
+                <field name="create_date"/>
+                <field name="name"/>
+                <field name="credits"/>
+                <field name="note"/>
+                <field name="player_id"/>
+                <field name="redeemed_at"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_ai_code_view_form" model="ir.ui.view">
+        <field name="name">gh.ai.code.form</field>
+        <field name="model">gh.ai.code</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <field name="credits" readonly="player_id"/>
+                        <field name="note"/>
+                        <field name="player_id"/>
+                        <field name="redeemed_at"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gh_ai_code_view_search" model="ir.ui.view">
+        <field name="name">gh.ai.code.search</field>
+        <field name="model">gh.ai.code</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="note"/>
+                <field name="player_id"/>
+                <filter name="unused" string="Non utilisés" domain="[('player_id', '=', False)]"/>
+                <filter name="used" string="Utilisés" domain="[('player_id', '!=', False)]"/>
+            </search>
+        </field>
+    </record>
+    <record id="action_gh_ai_code" model="ir.actions.act_window">
+        <field name="name">Codes IA</field>
+        <field name="res_model">gh.ai.code</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="gh_ai_code_wizard_view_form" model="ir.ui.view">
+        <field name="name">gh.ai.code.wizard.form</field>
+        <field name="model">gh.ai.code.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <p>Chaque code ajoute ses crédits IA au joueur qui le saisit (Profil → Crédits IA). Un code ne sert qu'une fois.</p>
+                <group>
+                    <field name="count"/>
+                    <field name="credits"/>
+                    <field name="note"/>
+                </group>
+                <footer>
+                    <button name="action_create" type="object" string="Créer" class="btn-primary"/>
+                    <button special="cancel" string="Annuler"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="action_gh_ai_code_wizard" model="ir.actions.act_window">
+        <field name="name">Créer des codes IA</field>
+        <field name="res_model">gh.ai.code.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- ============================== Réglages -->
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.genie_en_herbe</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="91"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Génie en herbe" string="Génie en herbe" name="genie_en_herbe_backend"
+                     groups="genie_en_herbe_backend.group_gh_manager">
+                    <block title="Matchs" name="gh_matches">
+                        <setting string="Joueurs par match" help="Match individuel : 2 joueurs au moins, ce nombre au plus.">
+                            <field name="gh_max_players"/>
+                        </setting>
+                        <setting string="Taille des équipes" help="Joueurs par équipe : au moins, au plus. Un match par équipes oppose toujours deux équipes.">
+                            <div><field name="gh_team_min_size" class="oe_inline"/> à <field name="gh_team_max_size" class="oe_inline"/></div>
+                        </setting>
+                        <setting string="Réglages proposés par défaut" help="Le créateur d'un match peut les changer.">
+                            <div>Temps par question : <field name="gh_question_seconds_default" class="oe_inline"/> s</div>
+                            <div>Durée de la main : <field name="gh_hand_seconds_default" class="oe_inline"/> s</div>
+                            <div>Questions : <field name="gh_question_count_default" class="oe_inline"/></div>
+                            <div>Affichage de la réponse : <field name="gh_reveal_seconds" class="oe_inline"/> s</div>
+                        </setting>
+                    </block>
+                    <block title="Ressources du serveur" name="gh_limits">
+                        <setting string="Matchs simultanés" help="Matchs libres en attente ou en cours en même temps. Au-delà, la création est refusée (réessayer plus tard).">
+                            <field name="gh_max_live_matches"/>
+                        </setting>
+                        <setting string="Tournois simultanés" help="Tournois aux inscriptions ouvertes ou en cours en même temps.">
+                            <field name="gh_max_live_tournaments"/>
+                        </setting>
+                        <setting string="Participants par tournoi (au plus)">
+                            <field name="gh_tournament_max_entries"/>
+                        </setting>
+                        <setting string="Forfait d'un duel (minutes, par défaut)" help="Délai pour confirmer « Prêt » ; l'organisateur peut le changer.">
+                            <field name="gh_forfeit_minutes_default"/>
+                        </setting>
+                    </block>
+                    <block title="Documents" name="gh_documents">
+                        <setting string="Documents par joueur (au plus)">
+                            <field name="gh_max_documents"/>
+                        </setting>
+                        <setting string="Pages par document (au plus)">
+                            <field name="gh_max_pages"/>
+                        </setting>
+                    </block>
+                    <block title="Questions rédigées par l'IA" name="gh_ai">
+                        <setting string="Activer l'IA" help="Désactivée : seules les questions tirées du texte sans IA sont proposées. Clé : paramètre système genie_en_herbe.anthropic_api_key (à défaut celle de Comprendre).">
+                            <field name="gh_ai_enabled"/>
+                        </setting>
+                        <setting string="Lots gratuits par joueur et par jour" help="Un lot = quelques pages (environ 9 000 caractères) envoyées ensemble à l'IA. Au-delà : crédits IA (codes IA), puis questions sans IA.">
+                            <field name="gh_ai_daily_quota"/>
+                        </setting>
+                        <setting string="Modèle" help="Identifiant du modèle Claude (claude-opus-5-5 par défaut ; claude-haiku-5-5 coûte bien moins cher).">
+                            <field name="gh_ai_model"/>
+                        </setting>
+                    </block>
+                    <block title="Comptes" name="gh_accounts">
+                        <setting string="Pays proposés à la connexion" help="Codes ISO séparés par des virgules (CI,SN,FR…).">
+                            <field name="gh_phone_countries"/>
+                        </setting>
+                        <setting string="Mots interdits dans les pseudos" help="Séparés par des virgules ; s'ajoutent à la liste livrée avec le module.">
+                            <field name="gh_banned_words"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+    <record id="action_gh_settings" model="ir.actions.act_window">
+        <field name="name">Réglages</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="context">{'module': 'genie_en_herbe_backend', 'bin_size': False}</field>
+    </record>
+
+    <!-- ============================== Menus -->
+    <menuitem id="menu_gh_root" name="Génie en herbe" sequence="63" groups="genie_en_herbe_backend.group_gh_manager"
+              web_icon="genie_en_herbe_backend,static/description/icon.png"/>
+    <menuitem id="menu_gh_documents" name="Documents" parent="menu_gh_root" sequence="5"/>
+    <menuitem id="menu_gh_questions" name="Questions" parent="menu_gh_documents" action="action_gh_question" sequence="10"/>
+    <menuitem id="menu_gh_documents_list" name="Documents" parent="menu_gh_documents" action="action_gh_document" sequence="1"/>
+    <menuitem id="menu_gh_matches" name="Matchs" parent="menu_gh_root" action="action_gh_match" sequence="10"/>
+    <menuitem id="menu_gh_tournaments" name="Tournois" parent="menu_gh_root" action="action_gh_tournament" sequence="20"/>
+    <menuitem id="menu_gh_players" name="Joueurs" parent="menu_gh_root" action="action_gh_player" sequence="30"/>
+    <menuitem id="menu_gh_reports" name="Signalements" parent="menu_gh_root" action="action_gh_report" sequence="40"/>
+    <menuitem id="menu_gh_config" name="Configuration" parent="menu_gh_root" sequence="90"/>
+    <menuitem id="menu_gh_settings" name="Réglages" parent="menu_gh_config" action="action_gh_settings" sequence="1"/>
+    <menuitem id="menu_gh_ai" name="IA" parent="menu_gh_root" sequence="50"/>
+    <menuitem id="menu_gh_ai_requests" name="Lots traités" parent="menu_gh_ai" action="action_gh_ai_request" sequence="1"/>
+    <menuitem id="menu_gh_ai_codes" name="Codes IA" parent="menu_gh_ai" action="action_gh_ai_code" sequence="2"/>
+    <menuitem id="menu_gh_ai_code_wizard" name="Créer des codes IA" parent="menu_gh_ai" action="action_gh_ai_code_wizard" sequence="3"/>
+</odoo>

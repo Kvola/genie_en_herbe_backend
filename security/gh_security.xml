@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <record id="privilege_genie_en_herbe" model="res.groups.privilege">
+            <field name="name">Génie en herbe</field>
+            <field name="category_id" ref="base.module_category_services"/>
+            <field name="sequence">61</field>
+        </record>
+        <!-- Les joueurs ne sont PAS des utilisateurs internes : comptes portail,
+             jeton porteur, routes en sudo filtrées par appartenance (controllers/).
+             Ce groupe est celui de l'équipe qui suit le service. -->
+        <record id="group_gh_manager" model="res.groups">
+            <field name="name">Génie en herbe — Gestionnaire</field>
+            <field name="privilege_id" ref="privilege_genie_en_herbe"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="user_ids" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+            <field name="comment">Joueurs, documents, questions, matchs, tournois, codes IA et réglages.</field>
+        </record>
+    </data>
+</odoo>

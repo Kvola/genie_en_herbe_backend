@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     LE GUIDE DE GÉNIE EN HERBE — FICHIER PRODUIT, NE PAS MODIFIER À LA MAIN
+
+     Source unique : genie_en_herbe/docs/GUIDE_UTILISATEUR.md
+     Régénérer (depuis le dossier sunday_jobs) :
+
+         python3 docs/md_to_guide_qweb.py genie-en-herbe
+
+     Une correction faite ici serait perdue à la prochaine conversion, et le
+     guide du dépôt de l'application continuerait à dire autre chose.
+═══════════════════════════════════════════════════════════════════════ -->
+<odoo>
+
+    <!-- Le contenu : appelé par la page en ligne (/apps/genie-en-herbe/guide) et par
+         le rapport imprimé ci-dessous. Il ne porte aucune couleur. -->
+    <template id="user_guide_content" name="Guide Génie en herbe — contenu">
+        <t>
+            <p>Génie en herbe transforme vos documents en concours de questions : chargez un cours, un manuel ou une présentation, choisissez les pages au programme, et affrontez d'autres joueurs ou d'autres équipes. Le premier qui prend la main répond.</p>
+            <h2 id="en-bref">En bref</h2>
+            <ol>
+            <li><strong>Connectez-vous</strong> avec votre numéro de téléphone (code reçu par WhatsApp), puis choisissez un pseudo.
+            </li>
+            <li><strong>Chargez un document</strong> : PDF, Word, PowerPoint, Excel, OpenDocument ou texte. Le texte est lu sur votre téléphone, page par page.
+            </li>
+            <li><strong>Choisissez les pages</strong> au programme : les questions sont préparées pour ces pages.
+            </li>
+            <li><strong>Créez un match ou un tournoi</strong>, partagez son code, et jouez.
+            </li></ol>
+            <div class="exemple"><p><strong>Situation</strong> — Mme Koné prépare ses élèves de 3e au concours de l'école. Elle charge le chapitre d'histoire en PDF, choisit les pages 12 à 18, et crée un match entre deux équipes qu'elle dirige sans jouer, projeté au tableau.</p></div>
+        </t>
+    </template>
+
+    <template id="report_user_guide">
+        <t t-call="web.html_container">
+            <!-- `docs`, et non `doc` : le rendu expose le RECORDSET. -->
+            <t t-foreach="docs" t-as="doc">
+            <!-- `web.basic_layout` pose le `div.article` que l'impression
+                 cherche. Sans lui, Odoo transmet le corps brut à wkhtmltopdf,
+                 sans déclaration d'encodage, et chaque accent sort abîmé. -->
+            <t t-call="web.basic_layout">
+            <div class="page">
+                <style>
+                    .page { font-family: Helvetica, Arial, sans-serif;
+                            color: #1a1a1a; font-size: 11pt; line-height: 1.5; }
+                    .page h1 { font-size: 20pt; margin: 0 0 4px; }
+                    .page h2 { font-size: 13pt; margin: 20px 0 8px;
+                               border-bottom: 1px solid #ddd; padding-bottom: 4px;
+                               page-break-after: avoid; }
+                    .page h3 { font-size: 11pt; margin: 14px 0 6px; color: #2E6B30;
+                               page-break-after: avoid; }
+                    .page table { width: 100%; border-collapse: collapse;
+                                  margin: 0 0 14px; font-size: 9.5pt; }
+                    .page tr { page-break-inside: avoid; }
+                    .page th, .page td { border: 1px solid #ddd; padding: 6px 8px;
+                                         text-align: left; vertical-align: top; }
+                    .page th { background: #f5f5f5; }
+                    .page .attention { border-left: 3px solid #2E6B30;
+                                       background: #fafafa; padding: 10px 14px;
+                                       margin: 0 0 14px; page-break-inside: avoid; }
+                    .page .exemple { border-left: 3px solid #2E6B30;
+                                     background: #f4f7f6; padding: 10px 14px;
+                                     margin: 0 0 14px; font-style: italic;
+                                     page-break-inside: avoid; }
+                    .page .attention p, .page .exemple p { margin: 0; }
+                    .page code { background: #f0f0f0; padding: 1px 4px; font-size: 9.5pt; }
+                    .page .sommaire a { color: #444; text-decoration: none; }
+                    .page .capture { text-align: center; margin: 0 0 16px;
+                                     page-break-inside: avoid; }
+                    .page .capture img { max-width: 62mm; border: 1px solid #ddd;
+                                         border-radius: 4px; }
+                    .page hr { border: 0; border-top: 1px solid #eee; margin: 18px 0; }
+                    .page .titre { border-bottom: 2px solid #2E6B30;
+                                   padding-bottom: 10px; margin-bottom: 18px; }
+                    .page .pied { margin-top: 26px; padding-top: 10px;
+                                  border-top: 1px solid #ddd; font-size: 9pt;
+                                  color: #666; }
+                </style>
+                <div class="titre">
+                    <h1>Guide d'utilisation</h1>
+                    <div t-esc="doc.name"/>
+                </div>
+                <!-- Captures INCORPORÉES : wkhtmltopdf rappellerait sinon le
+                     serveur, qui ne peut pas répondre pendant ce rendu. -->
+                <t t-set="guide_image_mode" t-value="'data'"/>
+                <t t-set="app" t-value="doc"/>
+                <t t-call="genie_en_herbe_backend.user_guide_content"/>
+                <div class="pied" t-if="doc.support_note">
+                    <t t-esc="doc.support_note"/>
+                </div>
+            </div>
+            </t>
+            </t>
+        </t>
+    </template>
+
+    <!-- Sur `mobile.app` : le socle refuse d'imprimer un guide déclaré sur un
+         autre modèle (il serait rendu sur le mauvais enregistrement). -->
+    <record id="action_report_user_guide" model="ir.actions.report">
+        <field name="name">Guide utilisateur — Génie en herbe</field>
+        <field name="model">mobile.app</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">genie_en_herbe_backend.report_user_guide</field>
+        <field name="report_file">genie_en_herbe_backend.report_user_guide</field>
+        <field name="print_report_name">'Guide - %s' % (object.name)</field>
+        <field name="binding_model_id" eval="False"/>
+    </record>
+
+</odoo>

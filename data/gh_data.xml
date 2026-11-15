@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="param_ai_enabled" model="ir.config_parameter">
+            <field name="key">genie_en_herbe.ai_enabled</field>
+            <field name="value">True</field>
+        </record>
+        <!-- Les téléphones font avancer les matchs (tick à chaque échéance) ;
+             cette tâche rattrape ceux que plus personne ne fait avancer. -->
+        <record id="cron_match_advance" model="ir.cron">
+            <field name="name">Génie en herbe : avancer les matchs abandonnés</field>
+            <field name="model_id" ref="model_gh_match"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_advance()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">minutes</field>
+        </record>
+        <record id="cron_tournament_deadlines" model="ir.cron">
+            <field name="name">Génie en herbe : forfaits des duels de tournoi</field>
+            <field name="model_id" ref="model_gh_tournament"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_deadlines()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">minutes</field>
+        </record>
+        <!-- Lots de pages en file pour l'IA : déclenchée aussitôt qu'un lot est
+             ajouté (_trigger), et toutes les 2 minutes en rattrapage. -->
+        <record id="cron_ai_requests" model="ir.cron">
+            <field name="name">Génie en herbe : questions de l'IA</field>
+            <field name="model_id" ref="model_gh_ai_request"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_process()</field>
+            <field name="interval_number">2</field>
+            <field name="interval_type">minutes</field>
+        </record>
+        <record id="cron_document_gc" model="ir.cron">
+            <field name="name">Génie en herbe : envois de documents inachevés</field>
+            <field name="model_id" ref="model_gh_document"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_gc()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+        </record>
+    </data>
+</odoo>
