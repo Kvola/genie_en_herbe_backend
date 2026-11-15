@@ -14,7 +14,7 @@ from odoo.addons.bus.websocket import WebsocketConnectionHandler
 
 from ..models.gh_config import PREFIX, gh_param
 from ..models.gh_document import DuplicateDocument
-from ..models.gh_match import BOUNDS, GameRefusal, MAX_PAGES, now_ts
+from ..models.gh_match import BOUNDS, GameRefusal, MAX_PAGES, ms_dt, now_ts
 from ..models.gh_notify import PUSH_APP_ID
 from .common import (API, RL_CREATE, RL_OTP_PER_IDENTIFIER, RL_OTP_REQUEST, RL_OTP_VERIFY, RL_PUBLIC, RL_REDEEM,
                      RL_SEARCH, RL_UPLOAD, account_route, arg_int, current_session, fail, guard, ok, player_route,
@@ -377,7 +377,7 @@ class QuizGameApi(Controller):
         } for line in lines], match_invitations=[{
             'id': inv.id, 'match_id': inv.match_id.id, 'code': inv.match_id.code, 'inviter': inv.inviter_id.pseudo,
             'pages_label': inv.match_id.pages_label or '', 'mode': inv.match_id.mode,
-            'players': inv.match_id.player_count,
+            'players': inv.match_id.player_count, 'scheduled_at': ms_dt(inv.match_id.scheduled_at),
         } for inv in request.env['gh.match.invitation'].sudo().search([
             ('player_id', '=', player.id), ('state', '=', 'pending'), ('match_id.state', '=', 'lobby'),
             ('inviter_id', 'not in', player.blocked_ids.ids)])])
@@ -416,7 +416,7 @@ class QuizGameApi(Controller):
             matches=[{
                 'id': m.id, 'code': m.code, 'mode': m.mode, 'lang': m.lang, 'pages_label': m.pages_label,
                 'creator': m.creator_id.pseudo or '', 'players': m.player_count, 'max_players': m.max_players,
-                'host_only': m.host_only,
+                'host_only': m.host_only, 'scheduled_at': ms_dt(m.scheduled_at),
                 'question_count': m.question_count, 'question_seconds': m.question_seconds,
             } for m in matches if m.player_count < m.max_players],
             tournaments=[{
@@ -451,6 +451,24 @@ class QuizGameApi(Controller):
     def match_tick(self, player, **kw):
         """Envoyé par les téléphones à chaque échéance (fin de question, de main, d'affichage)."""
         return self.match_state(**kw)
+
+    @route(API + '/match/scheduled', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
+    @player_route
+    def match_scheduled(self, player, **kw):
+        """Mes matchs programmés à venir : organisés, rejoints, ou auxquels je suis invité."""
+        Match = request.env['gh.match'].sudo()
+        base = [('state', '=', 'lobby'), ('kind', '=', 'free'), ('scheduled_at', '!=', False)]
+        mine = Match.search(base + ['|', ('creator_id', '=', player.id), '&',
+                                    ('participant_ids.player_id', '=', player.id), ('participant_ids.left', '=', False)])
+        invited = request.env['gh.match.invitation'].sudo().search(
+            [('player_id', '=', player.id), ('state', '=', 'pending'), ('match_id', 'in', Match.search(base).ids)]).match_id
+        items = []
+        for m in (mine | invited).sorted('scheduled_at'):
+            role = 'organizer' if m.creator_id == player else 'player' if m in mine else 'invited'
+            items.append({'id': m.id, 'code': m.code, 'pages_label': m.pages_label or '', 'mode': m.mode,
+                          'scheduled_at': ms_dt(m.scheduled_at), 'players': m.player_count, 'role': role,
+                          'creator': m.creator_id.pseudo or '', 'host_only': m.host_only})
+        return ok(matches=items)
 
     @route(API + '/match/watch', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
     def match_watch(self, **kw):
@@ -505,7 +523,7 @@ class QuizGameApi(Controller):
     def match_settings(self, player, **kw):
         match = _match_for(player, kw.get('match_id'))
         values = {k: kw.get(k) for k in ('pages', 'question_count', 'question_seconds', 'hand_seconds',
-                                          'is_public') if k in kw}
+                                          'is_public', 'scheduled_at') if k in kw}
         match.update_settings(player, values)
         return ok(**_match_payload(match, player))
 

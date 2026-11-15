@@ -48,8 +48,20 @@
             </li>
             <li><strong>Mes groupes</strong> : <strong>Inviter le groupe</strong> prévient tous ses membres d'un geste.
             </li></ul>
-            <p>L'invité est prévenu, accepte (il entre dans la salle d'attente) ou refuse ; la salle d'attente montre qui est invité et qui a refusé. Une invitation tombe d'elle-même quand le match commence. Le code du match, son QR code et le lien WhatsApp marchent toujours, pour ceux qui n'ont pas encore de compte.</p>
+            <p>L'invité est prévenu (notification sur son téléphone, même application fermée), accepte (il entre dans la salle d'attente) ou refuse ; la salle d'attente montre qui est invité et qui a refusé. Une invitation tombe d'elle-même quand le match commence. Le code du match, son QR code et le lien WhatsApp marchent toujours, pour ceux qui n'ont pas encore de compte.</p>
             <div class="exemple"><p><strong>Situation</strong> — M. Traoré a créé le groupe « 3e B » et affiché son code au tableau : chaque élève l'a saisi une fois dans <strong>Jouer → Rejoindre</strong>. Avant chaque séance de révision, il crée le match puis touche <strong>Inviter le groupe</strong> : toute la classe le retrouve dans <strong>Jouer</strong>, rubrique Invitations.</p></div>
+            <h3 id="programmer-un-match">Programmer un match</h3>
+            <p>À la création d'un match, activez <strong>Programmer le match</strong> et choisissez le jour et l'heure (de 5 minutes à 30 jours à l'avance). Les joueurs s'inscrivent et sont invités dès maintenant, sans être bloqués pour autant : ils peuvent jouer d'autres parties en attendant.</p>
+            <ul>
+            <li><strong>Rappels</strong> : la veille (pour un match programmé au moins un jour à l'avance), 10 minutes avant, puis à l'heure — l'organisateur est alors invité à <strong>lancer le match</strong>.
+            </li>
+            <li><strong>Changer l'heure</strong> : depuis la salle d'attente (icône calendrier) ; tous les inscrits et invités sont prévenus.
+            </li>
+            <li>Vos matchs programmés sont dans <strong>Jouer</strong>, rubrique <strong>Matchs programmés</strong>.
+            </li>
+            <li>Au lancement, un joueur encore occupé dans une autre partie est écarté du match (il en est prévenu). Un match que personne ne lance dans l'heure qui suit est annulé.
+            </li></ul>
+            <div class="exemple"><p><strong>Situation</strong> — Le lundi, M. Traoré programme le match de révision du vendredi à 15 h et invite le groupe « 3e B ». Les élèves reçoivent un rappel le jeudi, puis 10 minutes avant le début.</p></div>
             <h3 id="groupes">Groupes</h3>
             <p><strong>Profil → Mes groupes</strong> : créez un groupe (une classe, un club) et partagez son code (WhatsApp, QR code). Un tournoi peut être <strong>réservé à un groupe</strong> : seuls ses membres peuvent s'y inscrire. Le créateur peut renommer le groupe, changer son code, retirer un membre ou confier le groupe à un autre membre.</p>
             <h3 id="qui-peut-minviter-">Qui peut m'inviter ?</h3>

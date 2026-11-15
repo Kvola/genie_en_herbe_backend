@@ -40,7 +40,7 @@ import logging
 import random
 import secrets
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
@@ -91,6 +91,32 @@ def new_code(env):
                 not env['gh.tournament'].sudo().search_count([('code', '=', code)]):
             return code
     raise UserError(_("Impossible de créer un code. Réessayez."))
+
+
+def ms_dt(dt):
+    """Datetime (UTC, sans fuseau) → millisecondes depuis l'époque, ou None."""
+    return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000) if dt else None
+
+
+#: Un match se programme de 5 minutes à 30 jours à l'avance.
+SCHEDULE_MIN = timedelta(minutes=5)
+SCHEDULE_MAX = timedelta(days=30)
+
+
+def parse_schedule(value):
+    """Heure programmée envoyée par l'application (ms depuis l'époque, UTC) → datetime UTC naïf, ou None."""
+    if value in (None, False, '', 0):
+        return None
+    try:
+        dt = datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc).replace(tzinfo=None, microsecond=0)
+    except (TypeError, ValueError, OverflowError, OSError) as e:
+        raise UserError(_("Date du match illisible.")) from e
+    now = fields.Datetime.now()
+    if dt < now + SCHEDULE_MIN - timedelta(seconds=30):
+        raise GameRefusal('SCHEDULE', _("Programmez le match au moins 5 minutes à l'avance."))
+    if dt > now + SCHEDULE_MAX:
+        raise GameRefusal('SCHEDULE', _("Un match se programme au plus 30 jours à l'avance."))
+    return dt
 
 
 def clamp_setting(key, value, default):
@@ -167,6 +193,13 @@ class GhMatch(models.Model):
     lang = fields.Char("Langue", default='fr')
     page_ids = fields.Many2many('gh.document.page', 'gh_match_page_rel', 'match_id', 'page_id', "Pages")
     pages_label = fields.Char("Pages")
+    scheduled_at = fields.Datetime(
+        "Programmé pour", index=True,
+        help="Match programmé : les joueurs s'inscrivent à l'avance (sans être retenus ailleurs) ; "
+             "rappels la veille, 10 minutes avant et à l'heure.")
+    reminded_day = fields.Boolean("Rappel de la veille envoyé", readonly=True)
+    reminded_soon = fields.Boolean("Rappel des 10 minutes envoyé", readonly=True)
+    reminded_start = fields.Boolean("Rappel de l'heure envoyé", readonly=True)
     host_only = fields.Boolean("Organisé sans jouer",
                                help="Le créateur dirige le match (lancement, projection) sans y répondre.")
     question_count = fields.Integer("Nombre de questions", required=True, default=10)
@@ -297,6 +330,7 @@ class GhMatch(models.Model):
             'kind': match.kind, 'mode': match.mode, 'state': match.state, 'phase': match.phase or None,
             'lang': match.lang or 'fr', 'creator_id': match.creator_id.id or None, 'is_public': match.is_public,
             'creator_pseudo': match.creator_id.pseudo or '', 'host_only': match.host_only,
+            'scheduled_at': ms_dt(match.scheduled_at),
             'pages': [{'id': p.id, 'label': p.label, 'document_id': p.document_id.id, 'document': p.document_id.name}
                       for p in match.page_ids.sorted(lambda p: (p.document_id.id, p.number))],
             'pages_label': match.pages_label or '',
@@ -609,7 +643,10 @@ class GhMatch(models.Model):
     # ================================================================== salle d'attente
     @api.model
     def _live_free_count(self):
-        return self.sudo().search_count([('kind', '=', 'free'), ('state', 'in', ('lobby', 'running'))])
+        """Matchs libres en cours ou en salle d'attente ; un match programmé dans plus d'une heure ne compte pas."""
+        soon = fields.Datetime.now() + timedelta(hours=1)
+        return self.sudo().search_count([('kind', '=', 'free'), ('state', 'in', ('lobby', 'running')),
+                                         '|', ('scheduled_at', '=', False), ('scheduled_at', '<=', soon)])
 
     @api.model
     def create_free(self, player, values):
@@ -620,7 +657,13 @@ class GhMatch(models.Model):
         if self._live_free_count() >= gh_param(self.env, 'max_live_matches'):
             raise GameRefusal('SERVER_BUSY', _("Trop de matchs en cours en ce moment. Réessayez dans quelques minutes."))
         mode = values.get('mode') if values.get('mode') in ('solo', 'team') else 'solo'
+        scheduled = parse_schedule(values.get('scheduled_at'))
+        if scheduled and self.sudo().search_count([
+                ('creator_id', '=', player.id), ('state', '=', 'lobby'), ('scheduled_at', '!=', False)]) >= \
+                gh_param(self.env, 'max_scheduled_per_player'):
+            raise GameRefusal('SCHEDULE', _("Vous avez déjà %s matchs programmés.", gh_param(self.env, 'max_scheduled_per_player')))
         vals = self._settings_from(values, player)
+        vals['scheduled_at'] = scheduled or False
         team_max = gh_param(self.env, 'team_max_size')
         vals.update({
             'code': new_code(self.env), 'kind': 'free', 'mode': mode, 'creator_id': player.id,
@@ -633,7 +676,7 @@ class GhMatch(models.Model):
             except (TypeError, ValueError):
                 pass
         match = self.sudo().create(vals)
-        if match.host_only:
+        if match.host_only and not match._waiting_schedule():
             player._engage(match=match)  # l'organisateur ne joue pas ailleurs pendant ce temps
         else:
             match._add_participant(player)
@@ -664,7 +707,7 @@ class GhMatch(models.Model):
             if team:
                 part.team_id = team
             return part
-        if self.kind == 'free':
+        if self.kind == 'free' and not self._waiting_schedule():
             player._engage(match=self)
         if part:
             part.write({'left': False, 'team_id': team.id if team else False})
@@ -673,6 +716,10 @@ class GhMatch(models.Model):
             'match_id': self.id, 'player_id': player.id, 'team_id': team.id if team else False,
             'last_seen': now_ts(),
         })
+
+    def _waiting_schedule(self):
+        """Match programmé pas encore lancé : on s'y inscrit sans être retenu ailleurs (voir _begin)."""
+        return bool(self.scheduled_at) and self.state == 'lobby'
 
     def _check_lobby(self):
         if self.state != 'lobby':
@@ -790,6 +837,11 @@ class GhMatch(models.Model):
         vals = self._settings_from(merged, creator)
         if 'is_public' in values:
             vals['is_public'] = bool(values['is_public'])
+        if 'scheduled_at' in values and self.scheduled_at:
+            new = parse_schedule(values['scheduled_at'])
+            if new and new != self.scheduled_at:
+                vals.update(scheduled_at=new, reminded_day=False, reminded_soon=False, reminded_start=False)
+                self._notify_schedule('moved', new)
         self.write(vals)
         self._bump()
         return self
@@ -804,6 +856,8 @@ class GhMatch(models.Model):
 
     def _begin(self, now):
         """Vérifie les joueurs, tire les questions, lance le compte à rebours."""
+        if self.kind == 'free' and self.scheduled_at:
+            self._engage_scheduled()
         active = self._active()
         if self.mode == 'team':
             team_min = gh_param(self.env, 'team_min_size')
@@ -831,6 +885,31 @@ class GhMatch(models.Model):
             'started_at': fields.Datetime.now(), 'locked_keys': [],
         })
         self._bump()
+
+    def _engage_scheduled(self):
+        """Match programmé : chacun est retenu au lancement. Celui qui joue encore ailleurs est écarté."""
+        dropped = self.env['gh.player']
+        for part in self._active():
+            player = part.player_id
+            try:
+                with self.env.cr.savepoint():
+                    player._engage(match=self)
+            except UserError:
+                if part.team_id:
+                    part.team_id.leave(player)
+                part.sudo().unlink()
+                dropped |= player
+        if self.host_only:
+            try:
+                with self.env.cr.savepoint():
+                    self.creator_id._engage(match=self)
+            except UserError:
+                pass  # l'organisateur pris ailleurs dirige quand même
+        if dropped:
+            self.env['gh.notify']._players_event(dropped, 'match_dropped', {'match_id': self.id, 'code': self.code},
+                                                 _("Match programmé"),
+                                                 _("Le match %s a commencé sans vous : vous étiez dans une autre partie.",
+                                                   self.code))
 
     def _draw_questions(self):
         """Tire les questions dans la banque des pages choisies.
@@ -971,10 +1050,74 @@ class GhMatch(models.Model):
                         match._bump()
             except Exception:  # noqa: BLE001 — un match en échec ne bloque pas les autres
                 _logger.exception("Match %s : avance planifiée impossible", match.code)
-        stale = self.sudo().search([('state', '=', 'lobby'), ('kind', '=', 'free'), ('last_activity', '<', lobby_idle)])
+        self._cron_schedule_reminders()
+        # Salle d'attente abandonnée ; un match programmé attend son heure, puis encore le même délai.
+        stale = self.sudo().search([('state', '=', 'lobby'), ('kind', '=', 'free'), ('last_activity', '<', lobby_idle),
+                                    '|', ('scheduled_at', '=', False), ('scheduled_at', '<', lobby_idle)])
         for match in stale:
             match._lock()
             match._cancel()
+
+
+    # ------------------------------------------------------------------ matchs programmés
+    def _schedule_recipients(self):
+        """Inscrits, organisateur et invités encore en attente."""
+        self.ensure_one()
+        invited = self.env['gh.match.invitation'].sudo().search(
+            [('match_id', '=', self.id), ('state', '=', 'pending')]).player_id
+        return self._active().player_id | self.creator_id | invited
+
+    def _local_time(self, dt):
+        """« 16/11 à 14:30 » dans le fuseau du service (Afrique/Abidjan par défaut, réglable)."""
+        tz_name = self.env['ir.config_parameter'].sudo().get_param('genie_en_herbe.timezone') or 'Africa/Abidjan'
+        try:
+            import zoneinfo  # noqa: PLC0415
+            local = dt.replace(tzinfo=timezone.utc).astimezone(zoneinfo.ZoneInfo(tz_name))
+        except Exception:  # noqa: BLE001 — fuseau inconnu : UTC
+            local = dt
+        return local.strftime('%d/%m à %H:%M')
+
+    def _notify_schedule(self, kind, when=None):
+        self.ensure_one()
+        when = when or self.scheduled_at
+        payload = {'match_id': self.id, 'code': self.code, 'scheduled_at': ms_dt(when), 'kind': kind}
+        title = _("Match programmé — %s", self.pages_label or self.code)
+        bodies = {
+            'day': _("Rappel : match le %(when)s (code %(code)s).", when=self._local_time(when), code=self.code),
+            'soon': _("Le match commence dans 10 minutes (code %s).", self.code),
+            'start': _("C'est l'heure : rejoignez le match %s.", self.code),
+            'moved': _("Le match %(code)s est déplacé au %(when)s.", code=self.code, when=self._local_time(when)),
+        }
+        recipients = self._schedule_recipients()
+        if kind == 'start':
+            others = recipients - self.creator_id
+            self.env['gh.notify']._players_event(self.creator_id, 'match_reminder', dict(payload, creator=True), title,
+                                                 _("C'est l'heure : lancez le match %s.", self.code))
+            recipients = others
+        self.env['gh.notify']._players_event(recipients, 'match_reminder', payload, title, bodies[kind])
+
+    @api.model
+    def _cron_schedule_reminders(self):
+        now = fields.Datetime.now()
+        matches = self.sudo().search([('state', '=', 'lobby'), ('kind', '=', 'free'), ('scheduled_at', '!=', False),
+                                      ('reminded_start', '=', False), ('scheduled_at', '<=', now + timedelta(hours=24))])
+        for match in matches:
+            try:
+                with self.env.cr.savepoint():
+                    at = match.scheduled_at
+                    if now >= at:
+                        match._notify_schedule('start')
+                        match.write({'reminded_day': True, 'reminded_soon': True, 'reminded_start': True})
+                    elif now >= at - timedelta(minutes=10):
+                        if not match.reminded_soon:
+                            match._notify_schedule('soon')
+                            match.write({'reminded_day': True, 'reminded_soon': True})
+                    elif not match.reminded_day and now <= at - timedelta(hours=2) and \
+                            match.create_date <= at - timedelta(hours=20):
+                        match._notify_schedule('day')
+                        match.reminded_day = True
+            except Exception:  # noqa: BLE001 — un rappel en échec ne bloque pas les autres
+                _logger.exception("Match %s : rappel impossible", match.code)
 
 
 class GhMatchParticipant(models.Model):
