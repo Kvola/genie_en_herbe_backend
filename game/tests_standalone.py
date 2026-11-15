@@ -40,6 +40,13 @@ class TextTools(unittest.TestCase):
         s = split_sentences("M. Kouassi est venu. Il a vu 3.5 km de route. Fin")
         self.assertEqual([x.text for x in s], ['M. Kouassi est venu.', 'Il a vu 3.5 km de route.', 'Fin'])
 
+    def test_titre_separe(self):
+        s = split_sentences("L'empire du Mali\nL'empire fut fondé vers 1235. Il dura longtemps.")
+        self.assertEqual([x.text for x in s], ["L'empire du Mali", "L'empire fut fondé vers 1235.", 'Il dura longtemps.'])
+        # Une phrase coupée en fin de ligne n'est pas un titre.
+        s = split_sentences("Le fleuve traverse\nle Mali.")
+        self.assertEqual(len(s), 1)
+
     def test_clean(self):
         self.assertEqual(clean_text("la compré-\nhension du\ntexte\n\n\n\nSuite"), 'la compréhension du texte\n\nSuite')
 

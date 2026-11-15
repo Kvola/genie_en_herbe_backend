@@ -76,6 +76,18 @@ def _starts_sentence(ch):
     return ch.isupper() or ch.isdigit() or ch in '«"“(—–-'
 
 
+def _is_heading_break(text, start, i):
+    """Un retour à la ligne après une ligne courte sans ponctuation finale (un titre),
+    suivi d'une majuscule : fin de « phrase » (le titre n'est pas collé à la phrase suivante)."""
+    line = text[text.rfind('\n', start, i) + 1:i].strip()
+    if not line or len(line) > 80 or line[-1] in '.!?…:;,»"”)-–—':
+        return False
+    j = i + 1
+    while j < len(text) and text[j] in ' \t':
+        j += 1
+    return j < len(text) and (text[j].isupper() or text[j].isdigit())
+
+
 def split_sentences(text):
     """Phrases d'un texte, avec leur position de début."""
     out = []
@@ -95,6 +107,10 @@ def split_sentences(text):
     while i < n:
         ch = text[i]
         if ch == '\n' and i + 1 < n and text[i + 1] == '\n':
+            push(i)
+            i += 1
+            continue
+        if ch == '\n' and _is_heading_break(text, start, i):
             push(i)
             i += 1
             continue

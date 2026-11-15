@@ -429,7 +429,8 @@ class OfflineGenerator:
 
     # ------------------------------------------------------------------ types de questions
     def _quote_says(self, text):
-        return f'Le texte dit : « {text} »' if self.fr else f'The text says: “{text}”'
+        # La citation est montrée à part (après la réponse) : pas besoin de la répéter.
+        return ''
 
     def _main_topic(self, key, page_sents):
         """Thème de la page : le nom le plus présent DANS la page, s'il domine nettement."""
