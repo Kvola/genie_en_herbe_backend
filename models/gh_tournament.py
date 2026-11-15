@@ -70,6 +70,8 @@ class GhTournament(models.Model):
     started_at = fields.Datetime("Commencé le", readonly=True)
     finished_at = fields.Datetime("Terminé le", readonly=True)
 
+    group_id = fields.Many2one('gh.group', "Réservé au groupe", ondelete='set null',
+                               help="Seuls les membres de ce groupe peuvent s'inscrire.")
     entry_ids = fields.One2many('gh.tournament.entry', 'tournament_id', "Participants")
     duel_ids = fields.One2many('gh.tournament.duel', 'tournament_id', "Duels")
     team_ids = fields.One2many('gh.team', 'tournament_id', "Équipes")
@@ -159,6 +161,7 @@ class GhTournament(models.Model):
             'mode': t.mode, 'state': t.state, 'organizer_id': t.organizer_id.id or None,
             'organizer_pseudo': t.organizer_id.pseudo or '', 'is_public': t.is_public,
             'lang': t.lang or 'fr', 'pages_label': t.pages_label or '',
+            'group': {'id': t.group_id.id, 'name': t.group_id.name} if t.group_id else None,
             'pages': [{'id': p.id, 'label': p.label, 'document_id': p.document_id.id, 'document': p.document_id.name}
                       for p in t.page_ids.sorted(lambda p: (p.document_id.id, p.number))],
             'round_pages': {r: {'ids': ids, 'label': pages_label(self.env['gh.document.page'].sudo().browse(ids).exists())}
@@ -180,6 +183,9 @@ class GhTournament(models.Model):
         live = self.sudo().search_count([('state', 'in', ('registration', 'running'))])
         if live >= gh_param(self.env, 'max_live_tournaments'):
             raise GameRefusal('SERVER_BUSY', _("Trop de tournois en cours en ce moment. Réessayez plus tard."))
+        group = self.env['gh.group']
+        if values.get('group_id'):
+            group = self.env['gh.group']._for_member(player, values['group_id'])
         name = (values.get('name') or '').strip()[:60]
         if len(name) < 3:
             raise UserError(_("Donnez un nom au tournoi (3 caractères au moins)."))
@@ -199,7 +205,7 @@ class GhTournament(models.Model):
             'lang': pages.document_id[:1].lang or 'fr',
             'is_public': bool(values.get('is_public', True)),
             'min_entries': min_entries, 'max_entries': max_entries, 'forfeit_minutes': forfeit,
-            'page_ids': [(6, 0, pages.ids)], 'pages_label': pages_label(pages),
+            'page_ids': [(6, 0, pages.ids)], 'pages_label': pages_label(pages), 'group_id': group.id or False,
             'question_count': count,
             'question_seconds': clamp_setting('question_seconds', values.get('question_seconds'),
                                               gh_param(self.env, 'question_seconds_default')),
@@ -233,6 +239,10 @@ class GhTournament(models.Model):
         self._bump()
         return self
 
+    def _check_group(self, player):
+        if self.group_id and player not in self.group_id.member_ids.player_id:
+            raise GameRefusal('GROUP_ONLY', _("Ce tournoi est réservé aux membres du groupe « %s ».", self.group_id.name))
+
     def _check_room(self):
         if len(self.entry_ids) >= self.max_entries:
             raise GameRefusal('FULL', _("Le tournoi est complet."))
@@ -246,6 +256,7 @@ class GhTournament(models.Model):
             raise UserError(_("Ce tournoi se joue entre équipes : créez une équipe ou rejoignez-en une."))
         if self._entry_of(player):
             return self
+        self._check_group(player)
         self._check_room()
         player._engage(tournament=self)
         self.env['gh.tournament.entry'].sudo().create({'tournament_id': self.id, 'player_id': player.id})
@@ -287,6 +298,7 @@ class GhTournament(models.Model):
             raise UserError(_("Ce tournoi se joue entre joueurs."))
         if self._entry_of(player):
             raise UserError(_("Vous êtes déjà inscrit à ce tournoi."))
+        self._check_group(player)
         self._check_room()
         player._engage(tournament=self)
         name = (name or '').strip()[:40] or _("Équipe de %s", player.pseudo)
@@ -300,6 +312,7 @@ class GhTournament(models.Model):
 
     # rappels de gh.team
     def _team_member_joined(self, team, player):
+        self._check_group(player)
         player._engage(tournament=self)
         self._bump()
 
@@ -310,6 +323,36 @@ class GhTournament(models.Model):
     def _team_dissolved(self, team):
         self.entry_ids.filtered(lambda e: e.team_id == team).sudo().unlink()
         self._bump()
+
+    def invite(self, organizer, players):
+        """Prévient des joueurs (ou tout un groupe) qu'ils peuvent s'inscrire. Rend (prévenus, écartés)."""
+        self.ensure_one()
+        self._check_registration()
+        if self.organizer_id != organizer and not self._entry_of(organizer):
+            raise AccessError(_("Vous ne participez pas à ce tournoi."))
+        Inv = self.env['gh.match.invitation']
+        budget = gh_param(self.env, 'max_invites_per_hour') - Inv._sent_last_hour(organizer)
+        sent, skipped = self.env['gh.player'], []
+        for player in players:
+            reason = player._invitation_refusal(organizer)
+            if not reason and self._entry_of(player):
+                reason = 'already'
+            if not reason and self.group_id and player not in self.group_id.member_ids.player_id:
+                reason = 'group'
+            if not reason and budget <= 0:
+                reason = 'limit'
+            if reason:
+                skipped.append((player, reason))
+                continue
+            budget -= 1
+            sent |= player
+        if sent:
+            self.env['gh.notify']._players_event(sent, 'tournament_invitation', {
+                'tournament_id': self.id, 'code': self.code, 'name': self.name, 'inviter': organizer.pseudo},
+                _("Tournoi « %s »", self.name),
+                _("%(who)s vous invite à vous inscrire au tournoi « %(name)s ». Code : %(code)s",
+                  who=organizer.pseudo, name=self.name, code=self.code))
+        return sent, skipped
 
     # ================================================================== lancement et tableau
     def start(self, organizer):

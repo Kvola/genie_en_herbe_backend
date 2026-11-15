@@ -7,3 +7,4 @@ from . import gh_team
 from . import gh_match
 from . import gh_tournament
 from . import gh_notify
+from . import gh_social

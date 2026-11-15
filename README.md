@@ -26,6 +26,12 @@ des concours de questions sur les pages de vos documents.
   élimination directe, main de 5 s (chrono de la question en pause), +10 / −5 /
   0, questions décisives en tournoi. L'organisateur peut **diriger sans jouer**
   (`host_only`). Serveur seul arbitre ; temps réel par le bus Odoo.
+* **Inviter des joueurs** (`gh.match.invitation`) : par pseudo, parmi « Mes
+  joueurs » (`gh.contact`, rempli à la fin de chaque match) ou tout un
+  **groupe** (`gh.group`, code `G` + 7 caractères ; tournoi réservable à un
+  groupe). Garde-fous : invitations par heure bornées, « recevoir les
+  invitations de… » (tout le monde / mes joueurs et groupes / personne),
+  blocage d'un joueur.
 * Les joueurs d'un match relisent ses pages (`/document/page` avec `match_id`),
   même si le document est privé.
 

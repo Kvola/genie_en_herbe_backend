@@ -22,6 +22,10 @@ PARAMS = {
     'forfeit_minutes_default': (10, 1, 1440),
     'lobby_idle_minutes': (60, 5, 1440),    # salle d'attente abandonnée → annulée
     'running_idle_minutes': (10, 2, 1440),  # match sans aucune activité → clos
+    # Invitations et groupes
+    'max_invites_per_hour': (60, 1, 10000),  # invitations à un match envoyées par joueur et par heure
+    'max_groups': (30, 1, 1000),             # groupes créés par joueur
+    'max_group_members': (300, 2, 100000),
     # Documents
     'max_documents': (60, 1, 10000),        # documents par joueur
     'max_pages': (400, 1, 5000),            # pages par document

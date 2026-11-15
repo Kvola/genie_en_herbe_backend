@@ -18,3 +18,7 @@ access_gh_match_answer_manager,gh_match_answer manager,model_gh_match_answer,gro
 access_gh_tournament_manager,gh_tournament manager,model_gh_tournament,group_gh_manager,1,1,1,1
 access_gh_tournament_entry_manager,gh_tournament_entry manager,model_gh_tournament_entry,group_gh_manager,1,1,1,1
 access_gh_tournament_duel_manager,gh_tournament_duel manager,model_gh_tournament_duel,group_gh_manager,1,1,1,1
+access_gh_contact_manager,gh_contact manager,model_gh_contact,group_gh_manager,1,1,1,1
+access_gh_group_manager,gh_group manager,model_gh_group,group_gh_manager,1,1,1,1
+access_gh_group_member_manager,gh_group_member manager,model_gh_group_member,group_gh_manager,1,1,1,1
+access_gh_match_invitation_manager,gh_match_invitation manager,model_gh_match_invitation,group_gh_manager,1,1,1,1

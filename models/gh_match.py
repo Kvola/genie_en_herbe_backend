@@ -330,6 +330,10 @@ class GhMatch(models.Model):
                 data['question'] = question
         if match.state == 'finished':
             data['result'] = match._result_data()
+        if match.state == 'lobby' and match.kind == 'free':
+            invitations = self.env['gh.match.invitation'].sudo().search([('match_id', '=', match.id)])
+            data['invitations'] = [{'player_id': i.player_id.id, 'pseudo': i.player_id.pseudo, 'state': i.state,
+                                    'inviter': i.inviter_id.pseudo} for i in invitations]
         return data
 
     def _result_data(self):
@@ -571,6 +575,8 @@ class GhMatch(models.Model):
             'winner_participant_id': winner_part.id, 'winner_team_id': winner_team.id,
             'hand_participant_id': False,
         })
+        # « Mes joueurs » : chacun retrouvera les autres pour les inviter.
+        self.env['gh.contact']._met(parts.player_id | (self.creator_id if self.host_only else parts.player_id))
         # Statistiques des joueurs.
         for p in parts:
             p.player_id.sudo().write({
@@ -689,6 +695,10 @@ class GhMatch(models.Model):
         if len(self._active()) >= self.max_players:
             raise GameRefusal('FULL', _("Ce match est complet."))
         self._add_participant(player)
+        # Venu par le code ou par l'invitation : l'invitation est honorée.
+        self.env['gh.match.invitation'].sudo().search([
+            ('match_id', '=', self.id), ('player_id', '=', player.id), ('state', '=', 'pending')]).write(
+            {'state': 'accepted'})
         self._bump()
         return self
 
@@ -815,6 +825,7 @@ class GhMatch(models.Model):
         elif len(active) < 2:
             raise GameRefusal('PLAYERS', _("Il faut au moins deux joueurs."))
         self._draw_questions()
+        self.env['gh.match.invitation']._expire(self)
         self.write({
             'state': 'running', 'phase': 'countdown', 'phase_until': now + COUNTDOWN_SECONDS, 'q_index': 0,
             'started_at': fields.Datetime.now(), 'locked_keys': [],
@@ -906,6 +917,7 @@ class GhMatch(models.Model):
             if match.kind == 'free':
                 (match.participant_ids.player_id | match.creator_id)._release(match=match)
             match.write({'state': 'cancelled', 'phase': False})
+            self.env['gh.match.invitation']._expire(match)
             match._bump()
 
     # ------------------------------------------------------------------ équipes (rappels de gh.team)

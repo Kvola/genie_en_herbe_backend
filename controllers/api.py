@@ -374,7 +374,13 @@ class QuizGameApi(Controller):
             'match_id': line.team_id.match_id.id or None, 'match_code': line.team_id.match_id.code or None,
             'tournament_id': line.team_id.tournament_id.id or None,
             'tournament_name': line.team_id.tournament_id.name or None,
-        } for line in lines])
+        } for line in lines], match_invitations=[{
+            'id': inv.id, 'match_id': inv.match_id.id, 'code': inv.match_id.code, 'inviter': inv.inviter_id.pseudo,
+            'pages_label': inv.match_id.pages_label or '', 'mode': inv.match_id.mode,
+            'players': inv.match_id.player_count,
+        } for inv in request.env['gh.match.invitation'].sudo().search([
+            ('player_id', '=', player.id), ('state', '=', 'pending'), ('match_id.state', '=', 'lobby'),
+            ('inviter_id', 'not in', player.blocked_ids.ids)])])
 
     # ================================================================== codes, listes
     @route(API + '/join', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
@@ -393,6 +399,9 @@ class QuizGameApi(Controller):
         tournament = request.env['gh.tournament'].sudo().search([('code', '=', code)], limit=1)
         if tournament:
             return ok(kind='tournament', **_tournament_payload(tournament, player))
+        if len(code) == 8 and code.startswith('G'):
+            group = request.env['gh.group'].sudo().join_by_code(player, code)
+            return ok(kind='group', group=group._public(player, members=True))
         return fail('UNKNOWN_CODE', _("Aucun match ni tournoi avec ce code."))
 
     @route(API + '/open', type='jsonrpc', auth='public', methods=['POST'], csrf=False)

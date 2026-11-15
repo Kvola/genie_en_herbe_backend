@@ -50,6 +50,10 @@
                         <group string="IA">
                             <field name="ai_credits"/>
                         </group>
+                        <group string="Invitations">
+                            <field name="invite_policy"/>
+                            <field name="blocked_ids" widget="many2many_tags"/>
+                        </group>
                         <group string="Statistiques">
                             <field name="matches_played"/>
                             <field name="matches_won"/>
@@ -557,6 +561,63 @@
         <field name="target">new</field>
     </record>
 
+    <!-- ============================== Groupes, invitations -->
+    <record id="gh_group_view_list" model="ir.ui.view">
+        <field name="name">gh.group.list</field>
+        <field name="model">gh.group</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="owner_id"/>
+                <field name="member_count"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+    <record id="gh_group_view_form" model="ir.ui.view">
+        <field name="name">gh.group.form</field>
+        <field name="model">gh.group</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <sheet>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <field name="code" readonly="1"/>
+                        <field name="owner_id" readonly="1"/>
+                        <field name="active"/>
+                    </group>
+                    <field name="member_ids" readonly="1">
+                        <list><field name="player_id"/><field name="create_date" string="Membre depuis"/></list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_gh_group" model="ir.actions.act_window">
+        <field name="name">Groupes</field>
+        <field name="res_model">gh.group</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <record id="gh_match_invitation_view_list" model="ir.ui.view">
+        <field name="name">gh.match.invitation.list</field>
+        <field name="model">gh.match.invitation</field>
+        <field name="arch" type="xml">
+            <list create="0">
+                <field name="create_date"/>
+                <field name="match_id"/>
+                <field name="inviter_id"/>
+                <field name="player_id"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+    <record id="action_gh_match_invitation" model="ir.actions.act_window">
+        <field name="name">Invitations</field>
+        <field name="res_model">gh.match.invitation</field>
+        <field name="view_mode">list</field>
+    </record>
+
     <!-- ============================== Réglages -->
     <record id="res_config_settings_view_form" model="ir.ui.view">
         <field name="name">res.config.settings.view.form.inherit.genie_en_herbe</field>
@@ -643,6 +704,8 @@
     <menuitem id="menu_gh_matches" name="Matchs" parent="menu_gh_root" action="action_gh_match" sequence="10"/>
     <menuitem id="menu_gh_tournaments" name="Tournois" parent="menu_gh_root" action="action_gh_tournament" sequence="20"/>
     <menuitem id="menu_gh_players" name="Joueurs" parent="menu_gh_root" action="action_gh_player" sequence="30"/>
+    <menuitem id="menu_gh_groups" name="Groupes" parent="menu_gh_root" action="action_gh_group" sequence="32"/>
+    <menuitem id="menu_gh_invitations" name="Invitations" parent="menu_gh_root" action="action_gh_match_invitation" sequence="34"/>
     <menuitem id="menu_gh_reports" name="Signalements" parent="menu_gh_root" action="action_gh_report" sequence="40"/>
     <menuitem id="menu_gh_config" name="Configuration" parent="menu_gh_root" sequence="90"/>
     <menuitem id="menu_gh_settings" name="Réglages" parent="menu_gh_config" action="action_gh_settings" sequence="1"/>

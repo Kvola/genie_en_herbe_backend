@@ -39,6 +39,21 @@
             </li>
             <li><strong>Sans réseau</strong> : l'application s'ouvre, et les pages déjà lues restent disponibles pour s'entraîner ; elles sont gardées par le navigateur, sur cet appareil.
             </li></ul>
+            <h2 id="inviter-des-joueurs">Inviter des joueurs</h2>
+            <p>Dans la salle d'attente d'un match, touchez <strong>Inviter des joueurs</strong> :</p>
+            <ul>
+            <li><strong>Par pseudo</strong> : tapez le début du pseudo, cochez le joueur.
+            </li>
+            <li><strong>Mes joueurs</strong> : ceux avec qui vous avez déjà joué (vos favoris en tête) ; cochez-en plusieurs.
+            </li>
+            <li><strong>Mes groupes</strong> : <strong>Inviter le groupe</strong> prévient tous ses membres d'un geste.
+            </li></ul>
+            <p>L'invité est prévenu, accepte (il entre dans la salle d'attente) ou refuse ; la salle d'attente montre qui est invité et qui a refusé. Une invitation tombe d'elle-même quand le match commence. Le code du match, son QR code et le lien WhatsApp marchent toujours, pour ceux qui n'ont pas encore de compte.</p>
+            <div class="exemple"><p><strong>Situation</strong> — M. Traoré a créé le groupe « 3e B » et affiché son code au tableau : chaque élève l'a saisi une fois dans <strong>Jouer → Rejoindre</strong>. Avant chaque séance de révision, il crée le match puis touche <strong>Inviter le groupe</strong> : toute la classe le retrouve dans <strong>Jouer</strong>, rubrique Invitations.</p></div>
+            <h3 id="groupes">Groupes</h3>
+            <p><strong>Profil → Mes groupes</strong> : créez un groupe (une classe, un club) et partagez son code (WhatsApp, QR code). Un tournoi peut être <strong>réservé à un groupe</strong> : seuls ses membres peuvent s'y inscrire. Le créateur peut renommer le groupe, changer son code, retirer un membre ou confier le groupe à un autre membre.</p>
+            <h3 id="qui-peut-minviter-">Qui peut m'inviter ?</h3>
+            <p><strong>Profil → Mes joueurs</strong> : choisissez de recevoir les invitations de tout le monde, seulement de vos joueurs et de vos groupes, ou de personne ; bloquez un joueur si besoin (il n'en est pas prévenu). Votre numéro de téléphone n'est jamais montré aux autres joueurs.</p>
         </t>
     </template>
 

@@ -27,16 +27,22 @@ class GeniePublic(Controller):
         web = '%s/apps/%s/web/?join=%s' % (base, SLUG, code)
         intent = 'intent://join/%s#Intent;scheme=genieenherbe;package=%s;S.browser_fallback_url=%s;end' % (
             code, PACKAGE, quote(install, safe=''))
-        is_doc = len(code) == 8  # code de partage d'un document (D + 7 caractères)
+        is_group = len(code) == 8 and code.startswith('G')  # code d'un groupe (G + 7 caractères)
+        is_doc = len(code) == 8 and not is_group  # code de partage d'un document (D + 7 caractères)
         t = {
-            'title': ("Add a shared document" if en else "Ajouter un document partagé") if is_doc else
+            'title': ("Join a group" if en else "Rejoindre un groupe") if is_group else
+                     ("Add a shared document" if en else "Ajouter un document partagé") if is_doc else
                      ("Join a Génie en herbe game" if en else "Rejoindre une partie de Génie en herbe"),
-            'lead': ("Share code:" if en else "Code de partage :") if is_doc else
+            'lead': ("Group code:" if en else "Code du groupe :") if is_group else
+                    ("Share code:" if en else "Code de partage :") if is_doc else
                     ("Game code:" if en else "Code de la partie :"),
             'app': "Open in the app" if en else "Ouvrir dans l'application",
             'web': "Open in the browser" if en else "Ouvrir dans le navigateur",
             'install': "Install the app (Android)" if en else "Installer l'application (Android)",
-            'hint': ("No app? Use the browser, or install it, then type the code under Documents → Add a shared "
+            'hint': ("No app? Use the browser, or install it, then type the code under Play → Join."
+                     if en else "Pas encore l'application ? Utilisez le navigateur, ou installez-la puis "
+                                "saisissez le code dans Jouer → Rejoindre.") if is_group else
+                    ("No app? Use the browser, or install it, then type the code under Documents → Add a shared "
                      "document." if en else "Pas encore l'application ? Utilisez le navigateur, ou installez-la "
                      "puis saisissez le code dans Documents → Ajouter un document partagé.") if is_doc else
                     ("No app? Play in the browser, or install it, then type the code under Play → Join."

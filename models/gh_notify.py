@@ -8,6 +8,7 @@ doit ni ralentir ni bloquer une action de jeu, et on ne prévient pas d'une
 action annulée.
 """
 import logging
+import time
 
 from odoo import _, api, models
 
@@ -25,6 +26,9 @@ class GhNotify(models.AbstractModel):
         players = players.sudo().filtered('active')
         if not players:
             return
+        # Heure d'envoi (horloge du serveur, ms) : l'application ignore un événement ancien
+        # que le canal temps réel rejouerait à la reconnexion.
+        payload = dict(payload, sent_at=int(time.time() * 1000))
         bus = self.env['bus.bus'].sudo()
         for player in players:
             bus._sendone('gh.player.%s' % player.channel_token, 'gh_player',
