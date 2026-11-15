@@ -28,6 +28,17 @@
             <li><strong>Créez un match ou un tournoi</strong>, partagez son code, et jouez.
             </li></ol>
             <div class="exemple"><p><strong>Situation</strong> — Mme Koné prépare ses élèves de 3e au concours de l'école. Elle charge le chapitre d'histoire en PDF, choisit les pages 12 à 18, et crée un match entre deux équipes qu'elle dirige sans jouer, projeté au tableau.</p></div>
+            <h2 id="utiliser-lapplication-dans-le-navigateur">Utiliser l'application dans le navigateur</h2>
+            <p>Génie en herbe existe aussi en version web, sans rien installer : ouvrez la page de l'application (bouton « Ouvrir dans le navigateur »), sur un téléphone ou un ordinateur. Pratique pour projeter un match en classe depuis l'ordinateur de la salle.</p>
+            <ul>
+            <li><strong>Installer</strong> : dans Chrome, menu ⋮ → « Installer l'application » ; sur iPhone, Partager → « Sur l'écran d'accueil ». Elle s'ouvre alors en plein écran, comme une application.
+            </li>
+            <li><strong>Même compte</strong> : connectez-vous avec le même numéro ; vous retrouvez vos documents, vos matchs et vos tournois.
+            </li>
+            <li><strong>Ce qui ne marche que dans l'application Android</strong> : photographier des pages et lire un PDF scanné (reconnaissance de texte), scanner le QR code d'une partie (dans le navigateur, saisissez le code).
+            </li>
+            <li><strong>Sans réseau</strong> : l'application s'ouvre, et les pages déjà lues restent disponibles pour s'entraîner ; elles sont gardées par le navigateur, sur cet appareil.
+            </li></ul>
         </t>
     </template>
 
