@@ -24,12 +24,14 @@ import random
 import secrets
 import time
 
+from datetime import timedelta
+
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 from .gh_config import gh_param
 from .gh_document import pages_label
-from .gh_match import GameRefusal, check_pages, clamp_setting, ms, new_code, now_ts
+from .gh_match import GameRefusal, check_pages, clamp_setting, ms, ms_dt, new_code, now_ts, parse_schedule
 
 _logger = logging.getLogger(__name__)
 
@@ -70,6 +72,13 @@ class GhTournament(models.Model):
     started_at = fields.Datetime("Commencé le", readonly=True)
     finished_at = fields.Datetime("Terminé le", readonly=True)
 
+    scheduled_at = fields.Datetime(
+        "Programmé pour", index=True,
+        help="Tournoi programmé : on s'inscrit à l'avance sans être retenu ailleurs ; chacun est retenu au "
+             "lancement. Rappels la veille, 10 minutes avant et à l'heure.")
+    reminded_day = fields.Boolean(readonly=True)
+    reminded_soon = fields.Boolean(readonly=True)
+    reminded_start = fields.Boolean(readonly=True)
     group_id = fields.Many2one('gh.group', "Réservé au groupe", ondelete='set null',
                                help="Seuls les membres de ce groupe peuvent s'inscrire.")
     entry_ids = fields.One2many('gh.tournament.entry', 'tournament_id', "Participants")
@@ -162,6 +171,7 @@ class GhTournament(models.Model):
             'organizer_pseudo': t.organizer_id.pseudo or '', 'is_public': t.is_public,
             'lang': t.lang or 'fr', 'pages_label': t.pages_label or '',
             'group': {'id': t.group_id.id, 'name': t.group_id.name} if t.group_id else None,
+            'scheduled_at': ms_dt(t.scheduled_at),
             'pages': [{'id': p.id, 'label': p.label, 'document_id': p.document_id.id, 'document': p.document_id.name}
                       for p in t.page_ids.sorted(lambda p: (p.document_id.id, p.number))],
             'round_pages': {r: {'ids': ids, 'label': pages_label(self.env['gh.document.page'].sudo().browse(ids).exists())}
@@ -180,9 +190,18 @@ class GhTournament(models.Model):
     def create_tournament(self, player, values):
         player._ensure_can_play()
         self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext('gh.tournament.create'))")
-        live = self.sudo().search_count([('state', 'in', ('registration', 'running'))])
+        # Un tournoi programmé dans plus d'une heure n'occupe pas encore le serveur.
+        soon = fields.Datetime.now() + timedelta(hours=1)
+        live = self.sudo().search_count([('state', 'in', ('registration', 'running')),
+                                         '|', ('scheduled_at', '=', False), ('scheduled_at', '<=', soon)])
         if live >= gh_param(self.env, 'max_live_tournaments'):
             raise GameRefusal('SERVER_BUSY', _("Trop de tournois en cours en ce moment. Réessayez plus tard."))
+        scheduled = parse_schedule(values.get('scheduled_at'))
+        if scheduled and self.sudo().search_count([('organizer_id', '=', player.id), ('state', '=', 'registration'),
+                                                   ('scheduled_at', '!=', False)]) >= \
+                gh_param(self.env, 'max_scheduled_per_player'):
+            raise GameRefusal('SCHEDULE', _("Vous avez déjà %s tournois programmés.",
+                                            gh_param(self.env, 'max_scheduled_per_player')))
         group = self.env['gh.group']
         if values.get('group_id'):
             group = self.env['gh.group']._for_member(player, values['group_id'])
@@ -206,6 +225,7 @@ class GhTournament(models.Model):
             'is_public': bool(values.get('is_public', True)),
             'min_entries': min_entries, 'max_entries': max_entries, 'forfeit_minutes': forfeit,
             'page_ids': [(6, 0, pages.ids)], 'pages_label': pages_label(pages), 'group_id': group.id or False,
+            'scheduled_at': scheduled or False,
             'question_count': count,
             'question_seconds': clamp_setting('question_seconds', values.get('question_seconds'),
                                               gh_param(self.env, 'question_seconds_default')),
@@ -243,6 +263,56 @@ class GhTournament(models.Model):
         if self.group_id and player not in self.group_id.member_ids.player_id:
             raise GameRefusal('GROUP_ONLY', _("Ce tournoi est réservé aux membres du groupe « %s ».", self.group_id.name))
 
+    def _waiting_schedule(self):
+        return bool(self.scheduled_at) and self.state == 'registration'
+
+    def _engage_unless_scheduled(self, player):
+        """Tournoi programmé : on s'inscrit sans être retenu ailleurs ; l'engagement a lieu au lancement."""
+        if self._waiting_schedule():
+            player._ensure_can_play()
+        else:
+            player._engage(tournament=self)
+
+    def _engage_scheduled(self):
+        """Lancement d'un tournoi programmé : chacun est retenu. Joueur seul pris ailleurs : écarté ;
+        membre d'équipe pris ailleurs : retiré de l'équipe (l'équipe trop petite est écartée ensuite)."""
+        dropped = self.env['gh.player']
+        for entry in self.entry_ids:
+            for player in entry._players():
+                try:
+                    with self.env.cr.savepoint():
+                        player._engage(tournament=self)
+                except UserError:
+                    dropped |= player
+                    if entry.team_id:
+                        entry.team_id.member_ids.filtered(lambda m, p=player: m.player_id == p).sudo().unlink()
+                    else:
+                        entry.sudo().unlink()
+        # Une équipe sans plus aucun membre disparaît.
+        for entry in self.entry_ids.filtered(lambda e: e.team_id and not e.team_id._members()):
+            team = entry.team_id
+            entry.sudo().unlink()
+            team.sudo().unlink()
+        if dropped:
+            self.env['gh.notify']._players_event(dropped, 'tournament_dropped', {'tournament_id': self.id,
+                                                                                 'name': self.name},
+                                                 _("Tournoi « %s »", self.name),
+                                                 _("Le tournoi a commencé sans vous : vous étiez dans une autre partie."))
+
+    def reschedule(self, organizer, value):
+        self.ensure_one()
+        self._lock()
+        self._check_organizer(organizer)
+        self._check_registration()
+        if not self.scheduled_at:
+            raise UserError(_("Ce tournoi n'est pas programmé."))
+        new = parse_schedule(value)
+        if new and new != self.scheduled_at:
+            self.write({'scheduled_at': new, 'reminded_day': False, 'reminded_soon': False, 'reminded_start': False})
+            self._notify_schedule('moved')
+            self._bump()
+        return self
+
     def _check_room(self):
         if len(self.entry_ids) >= self.max_entries:
             raise GameRefusal('FULL', _("Le tournoi est complet."))
@@ -258,7 +328,7 @@ class GhTournament(models.Model):
             return self
         self._check_group(player)
         self._check_room()
-        player._engage(tournament=self)
+        self._engage_unless_scheduled(player)
         self.env['gh.tournament.entry'].sudo().create({'tournament_id': self.id, 'player_id': player.id})
         self._bump()
         return self
@@ -300,7 +370,7 @@ class GhTournament(models.Model):
             raise UserError(_("Vous êtes déjà inscrit à ce tournoi."))
         self._check_group(player)
         self._check_room()
-        player._engage(tournament=self)
+        self._engage_unless_scheduled(player)
         name = (name or '').strip()[:40] or _("Équipe de %s", player.pseudo)
         if self.team_ids.filtered(lambda t: t.name.lower() == name.lower()):
             raise UserError(_("Une équipe porte déjà ce nom dans ce tournoi."))
@@ -313,7 +383,7 @@ class GhTournament(models.Model):
     # rappels de gh.team
     def _team_member_joined(self, team, player):
         self._check_group(player)
-        player._engage(tournament=self)
+        self._engage_unless_scheduled(player)
         self._bump()
 
     def _team_member_left(self, team, player):
@@ -360,6 +430,8 @@ class GhTournament(models.Model):
         self._lock()
         self._check_organizer(organizer)
         self._check_registration()
+        if self.scheduled_at:
+            self._engage_scheduled()
         team_min = gh_param(self.env, 'team_min_size')
         if self.mode == 'team':
             # Les équipes incomplètes ne sont pas retenues : leurs joueurs sont libérés.
@@ -483,8 +555,64 @@ class GhTournament(models.Model):
             for duel in t.duel_ids.filtered(lambda d: d.state == 'ready_wait' and d.deadline and now >= d.deadline):
                 duel._forfeit(now)
 
+    # ------------------------------------------------------------------ tournois programmés
+    def _schedule_recipients(self):
+        self.ensure_one()
+        return self.entry_ids._players() | self.organizer_id
+
+    def _notify_schedule(self, kind):
+        self.ensure_one()
+        when = self.env['gh.match']._local_time(self.scheduled_at)
+        payload = {'tournament_id': self.id, 'code': self.code, 'name': self.name,
+                   'scheduled_at': ms_dt(self.scheduled_at), 'kind': kind}
+        title = _("Tournoi « %s »", self.name)
+        bodies = {
+            'day': _("Rappel : le tournoi commence le %s.", when),
+            'soon': _("Le tournoi commence dans 10 minutes."),
+            'start': _("C'est l'heure : le tournoi va commencer."),
+            'moved': _("Le tournoi est déplacé au %s.", when),
+        }
+        recipients = self._schedule_recipients()
+        if kind == 'start':
+            self.env['gh.notify']._players_event(self.organizer_id, 'tournament_reminder', dict(payload, creator=True),
+                                                 title, _("C'est l'heure : lancez le tournoi."))
+            recipients -= self.organizer_id
+        self.env['gh.notify']._players_event(recipients, 'tournament_reminder', payload, title, bodies[kind])
+
+    @api.model
+    def _cron_schedule(self):
+        """Rappels des tournois programmés ; annulation de ceux que personne ne lance à temps."""
+        now = fields.Datetime.now()
+        for t in self.sudo().search([('state', '=', 'registration'), ('scheduled_at', '!=', False),
+                                     ('reminded_start', '=', False), ('scheduled_at', '<=', now + timedelta(hours=24))]):
+            try:
+                with self.env.cr.savepoint():
+                    at = t.scheduled_at
+                    if now >= at:
+                        t._notify_schedule('start')
+                        t.write({'reminded_day': True, 'reminded_soon': True, 'reminded_start': True})
+                    elif now >= at - timedelta(minutes=10):
+                        if not t.reminded_soon:
+                            t._notify_schedule('soon')
+                            t.write({'reminded_day': True, 'reminded_soon': True})
+                    elif not t.reminded_day and now <= at - timedelta(hours=2) and \
+                            t.create_date <= at - timedelta(hours=20):
+                        t._notify_schedule('day')
+                        t.reminded_day = True
+            except Exception:  # noqa: BLE001
+                _logger.exception("Tournoi %s : rappel impossible", t.code)
+        late = now - timedelta(minutes=gh_param(self.env, 'lobby_idle_minutes'))
+        for t in self.sudo().search([('state', '=', 'registration'), ('scheduled_at', '!=', False),
+                                     ('scheduled_at', '<', late)]):
+            try:
+                with self.env.cr.savepoint():
+                    t.cancel()
+            except Exception:  # noqa: BLE001
+                _logger.exception("Tournoi %s : annulation impossible", t.code)
+
     @api.model
     def _cron_deadlines(self):
+        self._cron_schedule()
         now = now_ts()
         for t in self.sudo().search([('state', '=', 'running')]):
             if not t.duel_ids.filtered(lambda d: d.state == 'ready_wait' and d.deadline and now >= d.deadline):

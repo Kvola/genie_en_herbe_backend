@@ -361,7 +361,17 @@ class QuizGameApi(Controller):
                     (m.winner_team_id and p.team_id == m.winner_team_id)),
                 'tournament': m.tournament_id.name or None,
             })
-        return ok(matches=items)
+        # Tournois programmés : organisés ou auxquels je suis inscrit.
+        Tour = request.env['gh.tournament'].sudo()
+        tbase = [('state', '=', 'registration'), ('scheduled_at', '!=', False)]
+        entries = request.env['gh.tournament.entry'].sudo().search(
+            ['|', ('player_id', '=', player.id), ('team_id.member_ids.player_id', '=', player.id)])
+        tournaments = Tour.search(tbase + ['|', ('organizer_id', '=', player.id),
+                                           ('id', 'in', entries.tournament_id.ids)])
+        return ok(matches=items, tournaments=[{
+            'id': t.id, 'code': t.code, 'name': t.name, 'mode': t.mode, 'scheduled_at': ms_dt(t.scheduled_at),
+            'entries': t.entry_count, 'role': 'organizer' if t.organizer_id == player else 'player',
+            'organizer': t.organizer_id.pseudo or ''} for t in tournaments.sorted('scheduled_at')])
 
     @route(API + '/invitations', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
     @player_route
@@ -422,6 +432,7 @@ class QuizGameApi(Controller):
             tournaments=[{
                 'id': t.id, 'code': t.code, 'name': t.name, 'mode': t.mode, 'lang': t.lang,
                 'pages_label': t.pages_label, 'organizer': t.organizer_id.pseudo or '',
+                'scheduled_at': ms_dt(t.scheduled_at),
                 'entries': t.entry_count, 'max_entries': t.max_entries, 'min_entries': t.min_entries,
             } for t in tournaments],
         )
@@ -676,6 +687,7 @@ class QuizGameApi(Controller):
             'id': t.id, 'code': t.code, 'name': t.name, 'mode': t.mode, 'state': t.state,
             'organizer': t.organizer_id.pseudo or '', 'entries': t.entry_count,
             'winner': t.winner_entry_id.display_name if t.winner_entry_id else None,
+            'scheduled_at': ms_dt(t.scheduled_at),
         } for t in tournaments])
 
     @route(API + '/tournament/register', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
@@ -718,6 +730,13 @@ class QuizGameApi(Controller):
     def tournament_round_pages(self, player, **kw):
         t = _tournament_for(kw.get('tournament_id'))
         t.set_round_pages(player, arg_int(kw, 'round'), kw.get('pages') or [])
+        return ok(**_tournament_payload(t, player))
+
+    @route(API + '/tournament/reschedule', type='jsonrpc', auth='public', methods=['POST'], csrf=False)
+    @player_route
+    def tournament_reschedule(self, player, **kw):
+        t = _tournament_for(kw.get('tournament_id'))
+        t.reschedule(player, kw.get('scheduled_at'))
         return ok(**_tournament_payload(t, player))
 
     @route(API + '/duel/ready', type='jsonrpc', auth='public', methods=['POST'], csrf=False)

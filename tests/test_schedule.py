@@ -138,3 +138,64 @@ class TestSchedule(TransactionCase):
         m.invalidate_recordset()
         self.Match._cron_advance()
         self.assertEqual(m.state, 'cancelled')
+
+    # ------------------------------------------------------------------ tournois programmés
+    def tournament(self, organizer, delta=timedelta(days=2), **kw):
+        return self.env['gh.tournament'].sudo().create_tournament(organizer, dict(
+            {'name': 'Coupe programmée', 'pages': self.doc.page_ids.ids, 'question_count': 5,
+             'scheduled_at': in_ms(delta)}, **kw))
+
+    def test_tournoi_programme_inscription_sans_etre_retenu(self):
+        awa, ben, cyril = self.player('Awa'), self.player('Ben'), self.player('Cyril')
+        t = self.tournament(self.prof, play=True)
+        for p in (awa, ben, cyril):
+            t.register(p)
+        self.assertFalse(awa.tournament_id, "programmé : libre jusqu'au lancement")
+        # Cyril joue un match en attendant ; il y est toujours au lancement : écarté.
+        other = self.Match.create_free(cyril, {'pages': self.doc.page_ids.ids, 'question_count': 5})
+        other.join(self.player('Dora'))
+        t.start(self.prof)
+        self.assertEqual(t.state, 'running')
+        self.assertEqual((awa.tournament_id, ben.tournament_id, self.prof.tournament_id), (t, t, t))
+        self.assertEqual(cyril.match_id, other)
+        self.assertNotIn(cyril, t.entry_ids._players())
+        self.assertTrue(self.events('tournament_dropped'))
+
+    def test_tournoi_programme_par_equipes_membre_occupe_retire(self):
+        self.env['ir.config_parameter'].sudo().set_param('genie_en_herbe.team_min_size', '2')
+        a1, a2, b1, b2, b3 = (self.player(n) for n in ('Anne', 'Abel', 'Bea', 'Boris', 'Bianca'))
+        t = self.tournament(self.prof, mode='team')
+        ta = t.create_team(a1, 'Lions')
+        ta.invite(a1, a2)
+        ta.accept(a2, a2)
+        tb = t.create_team(b1, 'Aigles')
+        for p in (b2, b3):
+            tb.invite(b1, p)
+            tb.accept(p, p)
+        # Abel est pris ailleurs au lancement : les Lions n'ont plus assez de joueurs, ils sont écartés…
+        other = self.Match.create_free(a2, {'pages': self.doc.page_ids.ids, 'question_count': 5})
+        other.join(self.player('Dora'))
+        with self.assertRaises(GameRefusal):
+            t.start(self.prof)  # … et il ne reste qu'une équipe : pas de tournoi
+        self.assertEqual(t.state, 'registration')
+
+    def test_tournoi_programme_rappels_deplacement_annulation(self):
+        awa = self.player('Awa')
+        t = self.tournament(self.prof)
+        t.register(awa)
+        Tour = self.env['gh.tournament'].sudo()
+        t.scheduled_at = fields.Datetime.now() + timedelta(hours=21)
+        Tour._cron_schedule()
+        self.assertTrue(t.reminded_day)
+        self.assertEqual({e['player'] for e in self.events('tournament_reminder')}, {'Awa', 'Professeur'})
+        t.reschedule(self.prof, in_ms(timedelta(days=3)))
+        self.assertFalse(t.reminded_day)
+        self.assertTrue([e for e in self.events('tournament_reminder') if e['payload']['kind'] == 'moved'])
+        t.scheduled_at = fields.Datetime.now() - timedelta(minutes=1)
+        Tour._cron_schedule()
+        self.assertTrue(t.reminded_start)
+        self.assertEqual(t.state, 'registration')
+        t.scheduled_at = fields.Datetime.now() - timedelta(hours=3)
+        Tour._cron_schedule()
+        self.assertEqual(t.state, 'cancelled', "personne ne l'a lancé à temps")
+        self.assertFalse(awa.tournament_id)

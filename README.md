@@ -35,7 +35,8 @@ des concours de questions sur les pages de vos documents.
 * **Matchs programmés** (`scheduled_at`) : inscription sans engagement (le
   joueur est retenu au lancement ; celui qui joue ailleurs est écarté),
   rappels la veille / 10 min avant / à l'heure (tâche « avancer les matchs »),
-  annulation si personne ne lance dans l'heure. Fuseau des messages :
+  annulation si personne ne lance dans l'heure. Idem pour les **tournois
+  programmés** (inscription sans engagement, membre d'équipe occupé retiré). Fuseau des messages :
   paramètre `genie_en_herbe.timezone` (Africa/Abidjan par défaut).
 * Les joueurs d'un match relisent ses pages (`/document/page` avec `match_id`),
   même si le document est privé.

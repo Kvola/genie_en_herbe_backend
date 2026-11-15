@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': "Génie en herbe — quiz en ligne sur vos documents",
-    'version': '19.0.1.2.0',
+    'version': '19.0.1.3.0',
     'category': 'Productivity',
     'summary': "Serveur de l'application Génie en herbe : documents découpés en pages, questions "
                "(IA ou sans IA), matchs à la main, équipes et tournois",
